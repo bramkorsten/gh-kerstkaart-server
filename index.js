@@ -3,7 +3,7 @@
  * @Email:  code@bramkorsten.nl
  * @Project: Kerstkaart (server)
  * @Filename: index.js
- * @Last modified time: 2019-11-27T16:08:32+01:00
+ * @Last modified time: 2019-12-03T10:09:08+01:00
  * @Copyright: Copyright 2019 - Bram Korsten
  */
 const config = require("./_config.json");
@@ -14,7 +14,6 @@ const key = crypto
   .update(String(config.secret))
   .digest("hex")
   .slice(0, 16);
-console.log(key);
 const crypt_iv = Buffer.from([
   0xd8,
   0xb1,
@@ -38,12 +37,15 @@ const database = require("./classes/database.js");
 db = database.getDatabase();
 connections = [];
 
+var port = process.env.PORT || 5000;
+
 class GameServer {
   constructor() {
     // Setup the local databse connection and websocket server
-    console.log(crypt_iv);
     this.db = db;
-    this.wss = new WebSocket.Server({ port: 8080 });
+    this.wss = new WebSocket.Server({ port: port });
+
+    console.log("Websocket listening on port: " + port);
 
     database.setDefaults();
     this.functions = require("./classes/functions.js");
