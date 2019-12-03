@@ -19,7 +19,7 @@ function isValidChoice(choice) {
 function sendInvalidUser(ws) {
   const response = {
     type: "error",
-    message: "uID is invalid"
+    data: "uID is invalid"
   };
   ws.send(JSON.stringify(response));
   return false;
@@ -28,7 +28,7 @@ function sendInvalidUser(ws) {
 function sendUserNotInMatch(ws) {
   const response = {
     type: "error",
-    message: "User is not in a match"
+    data: "User is not in a match"
   };
   ws.send(JSON.stringify(response));
   return false;
@@ -37,7 +37,7 @@ function sendUserNotInMatch(ws) {
 function sendInvalidChoice(ws) {
   const response = {
     type: "error",
-    message: "Invalid Choice"
+    data: "Invalid Choice"
   };
   ws.send(JSON.stringify(response));
   return false;
@@ -69,12 +69,44 @@ function setMatchWon(matchId, winner) {
   return match;
 }
 
+function increaseStreakForPlayer(user) {
+  const newScore = user.highscore.currentStreak + 1;
+  if (user.highscore.bestStreak == user.highscore.currentStreak) {
+    db.get("clients")
+      .find({ uToken: user.uToken })
+      .get("highscore")
+      .assign({
+        currentStreak: newScore,
+        bestStreak: newScore
+      })
+      .write();
+  } else {
+    db.get("clients")
+      .find({ uToken: user.uToken })
+      .get("highscore")
+      .assign({
+        currentStreak: newScore
+      })
+      .write();
+  }
+}
+
+function resetStreakForPlayer(user) {
+  const dbUser = db
+    .get("clients")
+    .find({ uToken: user.uToken })
+    .get("highscore")
+    .assign({
+      currentStreak: 0
+    })
+    .write();
+}
+
 function getFirstEmptyMatch() {
   const match = db
     .get("matches")
     .find({ matchFull: false })
     .value();
-  console.log(match);
   if (!match) {
     return false;
   }
@@ -125,7 +157,7 @@ function createMatch(user) {
 function getUserMatch(user) {
   const dbUser = db
     .get("clients")
-    .find({ token: user.uToken })
+    .find({ uToken: user.uToken })
     .value();
   if (dbUser.currentMatch) {
     return dbUser.currentMatch;
@@ -285,14 +317,18 @@ module.exports = {
       const newUser = {
         uToken: token,
         name: user.name,
-        gamesPlayed: 0
+        gamesPlayed: 0,
+        highscore: {
+          currentStreak: 0,
+          bestStreak: 0
+        }
       };
       db.get("clients")
         .push(newUser)
         .write();
       const response = {
         type: "userUpdate",
-        message: newUser
+        data: newUser
       };
       ws.send(JSON.stringify(response));
     } else {
@@ -337,6 +373,39 @@ module.exports = {
     return true;
   },
 
+  forfeitMatch: function(message, ws) {
+    const token = message.userToken;
+    const user = isValidUser(token);
+    if (!user) {
+      return sendInvalidUser(ws);
+    }
+    if (!user.currentMatch) {
+      sendUserNotInMatch(ws);
+    }
+
+    const matchId = user.currentMatch;
+
+    const players = gameServer.getPlayersInMatch(matchId);
+    for (var i in players) {
+      if (user.uToken === players[i]) {
+        resetStreakForPlayer(isValidUser(players[i]));
+      } else {
+        increaseStreakForPlayer(isValidUser(players[i]));
+      }
+    }
+
+    const results = {
+      result: "forfeit",
+      data: "Player with uID " + user.uToken + " forfeited the match"
+    };
+    gameServer.sendMessageToMatch(matchId, "matchResults", results);
+    for (var i in players) {
+      gameServer.removePlayerFromActiveMatch(players[i]);
+      gameServer.removeCurrentMatchFromPlayer(players[i], false);
+    }
+    removeMatch(matchId);
+  },
+
   setChoice: function(message, ws) {
     const token = message.userToken;
     const dbUser = isValidUser(token);
@@ -360,9 +429,23 @@ module.exports = {
       results = calculateWinner(match.matchId, choices);
       // TODO: Set Highscores and remove players from match
       gameServer.sendMessageToMatch(match.matchId, "matchResults", results);
+      const player1 = isValidUser(results.player1.uToken);
+      const player2 = isValidUser(results.player2.uToken);
+      if (results.result == 1) {
+        console.log("player1Won");
+        increaseStreakForPlayer(player1);
+        resetStreakForPlayer(player2);
+      }
+      if (results.result == 2) {
+        console.log("Player2Won");
+        increaseStreakForPlayer(player2);
+        resetStreakForPlayer(player1);
+      }
       const players = gameServer.getPlayersInMatch(match.matchId);
-      for (var uToken in players) {
-        gameServer.removePlayerFromActiveMatch(uToken);
+      for (var i in players) {
+        if (results.result == i + 1) {
+        }
+        gameServer.removeCurrentMatchFromPlayer(players[i], true);
       }
       removeMatch(match.matchId);
       return true;

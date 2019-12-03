@@ -3,27 +3,47 @@
  * @Email:  code@bramkorsten.nl
  * @Project: Kerstkaart (server)
  * @Filename: index.js
- * @Last modified time: 2019-12-03T09:57:14+01:00
+ * @Last modified time: 2019-11-27T16:08:32+01:00
  * @Copyright: Copyright 2019 - Bram Korsten
  */
 const config = require("./_config.json");
 // const encryptor = require("simple-encryptor")(config.secret);
 const crypto = require("crypto");
+const key = crypto
+  .createHash("sha256")
+  .update(String(config.secret))
+  .digest("hex")
+  .slice(0, 16);
+console.log(key);
+const crypt_iv = Buffer.from([
+  0xd8,
+  0xb1,
+  0xd1,
+  0xbc,
+  0xdd,
+  0x58,
+  0x3b,
+  0xdd,
+  0x89,
+  0x4f,
+  0x33,
+  0x6a,
+  0x7b,
+  0x4b,
+  0x9e,
+  0x1b
+]);
 const WebSocket = require("ws");
 const database = require("./classes/database.js");
-
-var port = process.env.PORT || 5000;
-
 db = database.getDatabase();
 connections = [];
 
 class GameServer {
   constructor() {
     // Setup the local databse connection and websocket server
+    console.log(crypt_iv);
     this.db = db;
-    this.wss = new WebSocket.Server({ port: port });
-
-    console.log("Server listening on port: " + port);
+    this.wss = new WebSocket.Server({ port: 8080 });
 
     database.setDefaults();
     this.functions = require("./classes/functions.js");
@@ -133,8 +153,32 @@ class GameServer {
     return players;
   }
 
+  removeCurrentMatchFromPlayer(token, increaseGamesPlayed = false) {
+    const user = db
+      .get("clients")
+      .find({ uToken: token })
+      .value();
+
+    if (!user || !user.currentMatch) {
+      return true;
+    }
+    if (increaseGamesPlayed) {
+      db.get("clients")
+        .find({ uToken: token })
+        .update("gamesPlayed", n => n + 1)
+        .write();
+    }
+    db.get("clients")
+      .find({ uToken: token })
+      .unset("currentMatch")
+      .write();
+
+    return true;
+  }
+
   removePlayerFromActiveMatch(token) {
     // TODO: If player is in a current match, update the queue and let the opponent win!
+
     const user = db
       .get("clients")
       .find({ uToken: token })
@@ -151,16 +195,6 @@ class GameServer {
       .remove({ uToken: token })
       .write();
 
-    db.get("matches")
-      .find({ matchId: user.currentMatch })
-      .get("queue")
-      .remove({ uToken: token })
-      .write();
-
-    db.get("clients")
-      .find({ uToken: token })
-      .unset("currentMatch")
-      .write();
     return true;
   }
 }
@@ -170,14 +204,14 @@ gameServer = new GameServer();
 function noop() {}
 
 function encrypt(string) {
-  const encryptor = crypto.createCipher("aes-128-cbc", config.secret);
+  const encryptor = crypto.createCipheriv("aes-128-cbc", key, crypt_iv);
   var hashed = encryptor.update(string, "utf8", "hex");
   hashed += encryptor.final("hex");
   return hashed;
 }
 
 function decrypt(hash) {
-  const decryptor = crypto.createDecipher("aes-128-cbc", config.secret);
+  const decryptor = crypto.createDecipheriv("aes-128-cbc", key, crypt_iv);
   var string = decryptor.update(hash, "hex", "utf8");
   string += decryptor.final("utf8");
   return string;
