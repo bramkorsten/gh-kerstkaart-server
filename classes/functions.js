@@ -294,6 +294,15 @@ function placeUserInMatch(user, match) {
   }
 }
 
+// OPTIMIZE: Can this be done more efficiently?
+function getHighscoresFromDatabase() {
+  return db.get("clients").value();
+}
+
+function sendResponseToRequest(message, ws) {
+  ws.send(JSON.stringify(message));
+}
+
 // Sandboxed functions to keep users from running game logic directly
 
 module.exports = {
@@ -330,13 +339,13 @@ module.exports = {
         type: "userUpdate",
         data: newUser
       };
-      ws.send(JSON.stringify(response));
+      sendResponseToRequest(response, ws);
     } else {
       const response = {
         type: "userUpdate",
         data: databaseUser
       };
-      ws.send(JSON.stringify(response));
+      sendResponseToRequest(response, ws);
     }
   },
 
@@ -350,7 +359,7 @@ module.exports = {
       type: "userUpdate",
       data: databaseUser
     };
-    ws.send(JSON.stringify(response));
+    sendResponseToRequest(response, ws);
   },
 
   requestMatch: function(message, ws) {
@@ -453,5 +462,23 @@ module.exports = {
 
     gameServer.sendUpdateToMatch(match.matchId);
     return true;
+  },
+  getHighscores: function(message, ws) {
+    const token = message.userToken;
+    const dbUser = isValidUser(token);
+    if (!dbUser) {
+      return sendInvalidUser(ws);
+    }
+
+    const highscores = getHighscoresFromDatabase();
+
+    const response = {
+      type: "highscores",
+      data: {
+        highscores: highscores
+      }
+    };
+
+    sendResponseToRequest(response, ws);
   }
 };
