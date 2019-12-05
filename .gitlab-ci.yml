@@ -33,7 +33,6 @@ build:
   stage: build
   dependencies:
     - versioning
-    - prebuild
   image:
     name: gcr.io/kaniko-project/executor:debug-v0.13.0
     entrypoint: ['']
