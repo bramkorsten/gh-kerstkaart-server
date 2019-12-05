@@ -1,6 +1,6 @@
 const WebSocket = require("ws");
 
-const { encrypt } = require('../helpers/cryptors');
+const { encrypt, noop } = require('../helpers/cryptors');
 
 const gameFunctions = require("../helpers/gameFunctions");
 
