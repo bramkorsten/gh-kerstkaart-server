@@ -1,15 +1,36 @@
-const low = require("lowdb");
-const FileSync = require("lowdb/adapters/FileSync");
+module.exports = class Database {
+  constructor() {
+    const MongoClient = require("mongodb").MongoClient;
+    this.url = "mongodb://localhost:27017";
+    this.dbName = "kerstkaart2019";
+    this.client = new MongoClient(this.url, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
+    this.db;
+  }
 
-const adapter = new FileSync("databases/db.json");
-const db = low(adapter);
+  async init() {
+    var context = this;
+    return new Promise(function(resolve, reject) {
+      context.client.connect(function(err) {
+        console.log("Connected successfully to server");
 
-module.exports = {
-  getDatabase: function() {
-    return db;
-  },
+        context.db = context.client.db(context.dbName);
+        resolve(context.db);
+      });
+    });
+  }
 
-  setDefaults: function() {
-    db.defaults({ matches: [], clients: [] }).write();
+  getDatabase() {
+    return this.db;
+  }
+
+  createNewDatabase() {
+    console.log("Function was never implemented :)");
+  }
+
+  closeConnection() {
+    this.client.close();
   }
 };

@@ -3,11 +3,12 @@
  * @Email:  code@bramkorsten.nl
  * @Project: Kerstkaart (server)
  * @Filename: index.js
- * @Last modified time: 2019-12-03T10:09:08+01:00
+ * @Last modified time: 2019-12-05T10:54:36+01:00
  * @Copyright: Copyright 2019 - Bram Korsten
  */
+gameserver = null;
+db = null;
 const config = require("./_config.json");
-// const encryptor = require("simple-encryptor")(config.secret);
 const crypto = require("crypto");
 const key = crypto
   .createHash("sha256")
@@ -32,22 +33,27 @@ const crypt_iv = Buffer.from([
   0x9e,
   0x1b
 ]);
-const WebSocket = require("ws");
-const database = require("./classes/database.js");
-db = database.getDatabase();
-connections = [];
 
+connections = [];
 var port = process.env.PORT || 5000;
+
+const WebSocket = require("ws");
+const DB = require("./classes/database.js");
+const database = new DB();
+database.init().then(function(database) {
+  db = database;
+  gameServer = new GameServer();
+});
 
 class GameServer {
   constructor() {
-    // Setup the local databse connection and websocket server
+    // Setup the local database connection and websocket server
     this.db = db;
     this.wss = new WebSocket.Server({ port: port });
 
     console.log("Websocket listening on port: " + port);
 
-    database.setDefaults();
+    // database.setDefaults();
     this.functions = require("./classes/functions.js");
     this.setConnection();
     this.checkConnections();
@@ -98,110 +104,132 @@ class GameServer {
   }
 
   sendUpdateToMatch(matchId, match = false, sendChoices = false) {
-    var players = this.getPlayersInMatch(matchId);
-    if (!match) {
-      match = db
-        .get("matches")
-        .find({ matchId: matchId })
-        .cloneDeep()
-        .value();
-    }
-
-    var matchVal = match;
-
-    if (!sendChoices) {
-      matchVal.currentGame.players.forEach(function(player, i) {
-        matchVal.currentGame.players[i].choice = "Wouldn't you like to know";
+    this.getPlayersInMatch(matchId, false, function(players) {
+      const matchesCollection = db.collection("matches");
+      matchesCollection.findOne({ matchId: matchId }, function(err, match) {
+        if (!sendChoices) {
+          match.currentGame.players.forEach(function(player, i) {
+            match.currentGame.players[i].choice = "Wouldn't you like to know";
+          });
+        }
+        const response = {
+          type: "matchUpdate",
+          data: match
+        };
+        for (var player of players) {
+          console.log("sending update to: " + player);
+          if (connections.hasOwnProperty(player)) {
+            connections[player].send(JSON.stringify(response));
+          } else {
+            console.log("player in match not connected");
+          }
+        }
       });
-    }
-
-    const response = {
-      type: "matchUpdate",
-      data: matchVal
-    };
-    for (var player of players) {
-      console.log("sending update to: " + player);
-      if (connections.hasOwnProperty(player)) {
-        connections[player].send(JSON.stringify(response));
-      } else {
-        console.log("player in match not connected");
-      }
-    }
+    });
   }
 
   sendMessageToMatch(matchId, messageType, message) {
-    const players = this.getPlayersInMatch(matchId);
-    const response = {
-      type: messageType,
-      data: message
-    };
-    for (var player of players) {
-      console.log("sending message to: " + player);
-      if (connections.hasOwnProperty(player)) {
-        connections[player].send(JSON.stringify(response));
-      } else {
-        console.log("player in match not connected");
+    this.getPlayersInMatch(matchId, false, function(players) {
+      const response = {
+        type: messageType,
+        data: message
+      };
+      for (var player of players) {
+        console.log("sending message to: " + player);
+        if (connections.hasOwnProperty(player)) {
+          connections[player].send(JSON.stringify(response));
+        } else {
+          console.log("player in match not connected");
+        }
       }
-    }
+    });
   }
 
-  getPlayersInMatch(matchId) {
-    const players = db
-      .get("matches")
-      .find({ matchId: matchId })
-      .get("currentGame.players")
-      .map("uToken")
-      .value();
-    return players;
+  /**
+   * Get all players in a match
+   * @param  {String} matchId The ID of the match to find players for
+   * @param  {Boolean} returnObject Should the full played be returned?
+   * @return {Array}          An array of user tokens
+   */
+  getPlayersInMatch(matchId, returnObject = false, callback) {
+    db.collection("matches").findOne({ matchId: matchId }, function(err, r) {
+      var players = [];
+      if (returnObject) {
+        for (var player of r.currentGame.players) {
+          players.push(player.player);
+        }
+      } else {
+        for (var player of r.currentGame.players) {
+          players.push(player.uToken);
+        }
+      }
+      callback(players);
+    });
   }
 
-  removeCurrentMatchFromPlayer(token, increaseGamesPlayed = false) {
-    const user = db
-      .get("clients")
-      .find({ uToken: token })
-      .value();
+  /**
+   * Remove the current match from the player
+   * @param  {String}  token                       The user's token
+   * @param  {Boolean} increaseGamesPlayed         Whether to increase the number of games played
+   * @return {Boolean}
+   */
+  removeCurrentMatchFromPlayer(
+    token,
+    increaseGamesPlayed = false,
+    callback = false
+  ) {
+    const clientCollection = db.collection("clients");
+    clientCollection.findOne({ uToken: token }, function(err, user) {
+      if (!user || !user.currentMatch) {
+        return true;
+      }
+      if (increaseGamesPlayed) {
+        clientCollection.updateOne(
+          { uToken: token },
+          { $inc: { gamesPlayed: 1 } }
+        );
+      }
 
-    if (!user || !user.currentMatch) {
+      clientCollection
+        .updateOne({ uToken: token }, { $unset: { currentMatch: "" } })
+        .then(function() {
+          callback(true);
+        });
       return true;
-    }
-    if (increaseGamesPlayed) {
-      db.get("clients")
-        .find({ uToken: token })
-        .update("gamesPlayed", n => n + 1)
-        .write();
-    }
-    db.get("clients")
-      .find({ uToken: token })
-      .unset("currentMatch")
-      .write();
-
-    return true;
+    });
   }
 
-  removePlayerFromActiveMatch(token) {
+  removePlayerFromActiveMatch(token, callback = false) {
     // TODO: If player is in a current match, update the queue and let the opponent win!
 
-    const user = db
-      .get("clients")
-      .find({ uToken: token })
-      .value();
-
-    if (!user || !user.currentMatch) {
-      return true;
-    }
-
-    db.get("matches")
-      .find({ matchId: user.currentMatch })
-      .assign({ matchFull: false })
-      .get("currentGame.players")
-      .remove({ uToken: token })
-      .write();
-
-    return true;
+    const clientCollection = db.collection("clients");
+    clientCollection.findOne({ uToken: token }, function(err, user) {
+      if (!user || !user.currentMatch) {
+        return true;
+      }
+      db.collection("matches").findOne({ matchId: user.currentMatch }, function(
+        err,
+        r
+      ) {
+        var currentGame = r.currentGame.players;
+        var newGame = [];
+        for (var player of currentGame) {
+          if (player.uToken != token) {
+            newGame.push(player);
+          }
+        }
+        db.collection("matches")
+          .updateOne(
+            { matchId: user.currentMatch },
+            { $set: { "currentGame.players": newGame, matchFull: false } }
+          )
+          .then(function() {
+            callback(true);
+          });
+      });
+    });
   }
 }
-
-gameServer = new GameServer();
 
 function noop() {}
 
