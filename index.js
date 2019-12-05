@@ -6,8 +6,8 @@
  * @Last modified time: 2019-12-05T10:54:36+01:00
  * @Copyright: Copyright 2019 - Bram Korsten
  */
-let gameserver = null;
-let db = null;
+gameserver = null;
+db = null;
 
 const config = require("./_config.json");
 const crypto = require("crypto");
