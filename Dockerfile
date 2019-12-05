@@ -10,10 +10,10 @@ COPY ./yarn.lock .
 RUN yarn install --production --no-progress
 
 # Copy application files
-COPY . .
+COPY ./server ./server
 
 # Run the container under "node" user by default
 USER node
 EXPOSE 3000
 
-CMD node ./index.js
+CMD node ./server

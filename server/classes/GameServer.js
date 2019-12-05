@@ -1,80 +1,38 @@
-/**
- * @Date:   2019-10-24T14:26:59+02:00
- * @Email:  code@bramkorsten.nl
- * @Project: Kerstkaart (server)
- * @Filename: index.js
- * @Last modified time: 2019-12-05T10:54:36+01:00
- * @Copyright: Copyright 2019 - Bram Korsten
- */
-gameserver = null;
-db = null;
-
-const config = require("./_config.json");
-const crypto = require("crypto");
-const key = crypto
-  .createHash("sha256")
-  .update(String(config.secret))
-  .digest("hex")
-  .slice(0, 16);
-
-const crypt_iv = Buffer.from([
-  0xd8,
-  0xb1,
-  0xd1,
-  0xbc,
-  0xdd,
-  0x58,
-  0x3b,
-  0xdd,
-  0x89,
-  0x4f,
-  0x33,
-  0x6a,
-  0x7b,
-  0x4b,
-  0x9e,
-  0x1b
-]);
-
-connections = [];
-var port = process.env.PORT || 3000;
-
 const WebSocket = require("ws");
-const DB = require("./classes/database");
-const database = new DB();
 
-database.init().then(function(database) {
-  db = database;
-  gameServer = new GameServer();
-});
+const { encrypt } = require('../helpers/cryptors');
 
-class GameServer {
-  constructor() {
+const gameFunctions = require("../helpers/gameFunctions");
+
+const port = process.env.PORT || 3000;
+
+module.exports = class GameServer {
+  constructor(db) {
     // Setup the local database connection and websocket server
     this.db = db;
     this.wss = new WebSocket.Server({ port: port });
+    this.functions = gameFunctions(db);
 
     console.log("Websocket listening on port: " + port);
 
     // database.setDefaults();
-    this.functions = require("./classes/functions");
     this.setConnection();
     this.checkConnections();
   }
 
   setConnection() {
-    this.wss.on("connection", function connection(ws) {
+    this.wss.on("connection", (ws) => {
       ws.isAlive = true;
-      ws.on("pong", function() {
+      ws.on("pong",  () => {
         this.isAlive = true;
       });
-      ws.on("message", function incoming(message) {
+      ws.on("message", (message) => {
         const parsedMessage = JSON.parse(message);
         parsedMessage.userToken = encrypt(parsedMessage.uid);
         connections[parsedMessage.userToken] = ws;
 
-        if (gameServer.functions[parsedMessage.type] instanceof Function) {
-          gameServer.functions[parsedMessage.type](parsedMessage, ws);
+        if (this.functions[parsedMessage.type] instanceof Function) {
+          this.functions[parsedMessage.type](parsedMessage, ws);
         } else {
           const response = {
             type: "error",
@@ -232,20 +190,4 @@ class GameServer {
       });
     });
   }
-}
-
-function noop() {}
-
-function encrypt(string) {
-  const encryptor = crypto.createCipheriv("aes-128-cbc", key, crypt_iv);
-  var hashed = encryptor.update(string, "utf8", "hex");
-  hashed += encryptor.final("hex");
-  return hashed;
-}
-
-function decrypt(hash) {
-  const decryptor = crypto.createDecipheriv("aes-128-cbc", key, crypt_iv);
-  var string = decryptor.update(hash, "hex", "utf8");
-  string += decryptor.final("utf8");
-  return string;
 }

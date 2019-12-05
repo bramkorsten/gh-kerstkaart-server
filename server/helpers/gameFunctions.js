@@ -1,4 +1,5 @@
 // TODO: Optimize database writes by only calling write() once
+let db;
 
 const validChoices = ["rock", "paper", "scissors", 1, 2, 3];
 
@@ -300,201 +301,204 @@ function sendResponseToRequest(message, ws) {
 
 // Sandboxed functions to keep users from running game logic directly
 
-module.exports = {
-  requestConnection: function(message, ws) {
-    console.log("New Connection Request");
-    const response = {
-      type: "handshake",
-      data: {
-        userToken: message.userToken
-      }
-    };
-    ws.send(JSON.stringify(response));
-  },
+module.exports = database => {
+  db = database;
 
-  setUserInformation: function(message, ws) {
-    const token = message.userToken;
-    const user = message.message;
-    isValidUser(token).then(function(databaseUser) {
-      if (!databaseUser) {
-        createNewUser(user, token).then(function(newUser) {
+  return {
+    requestConnection: function(message, ws) {
+      console.log("New Connection Request");
+      const response = {
+        type: "handshake",
+        data: {
+          userToken: message.userToken
+        }
+      };
+      ws.send(JSON.stringify(response));
+    },
+
+    setUserInformation: function(message, ws) {
+      const token = message.userToken;
+      const user = message.message;
+      isValidUser(token).then(function(databaseUser) {
+        if (!databaseUser) {
+          createNewUser(user, token).then(function(newUser) {
+            const response = {
+              type: "userUpdate",
+              data: newUser
+            };
+            sendResponseToRequest(response, ws);
+          });
+        } else {
           const response = {
             type: "userUpdate",
-            data: newUser
+            data: databaseUser
           };
           sendResponseToRequest(response, ws);
-        });
-      } else {
+        }
+      });
+    },
+
+    getUserInformation: function(message, ws) {
+      const token = message.userToken;
+      isValidUser(token).then(function(databaseUser) {
+        if (!databaseUser) {
+          return sendInvalidUser(ws);
+        }
         const response = {
           type: "userUpdate",
           data: databaseUser
         };
         sendResponseToRequest(response, ws);
-      }
-    });
-  },
-
-  getUserInformation: function(message, ws) {
-    const token = message.userToken;
-    isValidUser(token).then(function(databaseUser) {
-      if (!databaseUser) {
-        return sendInvalidUser(ws);
-      }
-      const response = {
-        type: "userUpdate",
-        data: databaseUser
-      };
-      sendResponseToRequest(response, ws);
-    });
-  },
-
-  requestMatch: function(message, ws) {
-    const token = message.userToken;
-    isValidUser(token).then(function(user) {
-      if (!user) {
-        return sendInvalidUser(ws);
-      }
-      if (!user.currentMatch) {
-        getFirstEmptyMatch().then(function(match) {
-          if (match) {
-            console.log("Match Found");
-            placeUserInMatch(user, match).then(function(match) {
-              gameServer.sendUpdateToMatch(match.matchId);
-            });
-          } else {
-            match = createMatch(user);
-            gameServer.sendUpdateToMatch(match.matchId);
-          }
-        });
-      } else {
-        getMatch(user.currentMatch).then(function(match) {
-          if (match) {
-            placeUserInMatch(user, match).then(function(match) {
-              gameServer.sendUpdateToMatch(match.matchId);
-            });
-          } else {
-            match = createMatch(user);
-            gameServer.sendUpdateToMatch(match.matchId);
-          }
-        });
-      }
-      return true;
-    });
-  },
-
-  forfeitMatch: function(message, ws) {
-    const token = message.userToken;
-    isValidUser(token).then(function(user) {
-      if (!user) {
-        return sendInvalidUser(ws);
-      }
-      if (!user.currentMatch) {
-        sendUserNotInMatch(ws);
-      }
-
-      const matchId = user.currentMatch;
-
-      gameServer.getPlayersInMatch(matchId, true, function(players) {
-        for (var player of players) {
-          if (user.uToken === player.uToken) {
-            resetStreakForPlayer(player);
-          } else {
-            increaseStreakForPlayer(player);
-          }
-        }
-        const results = {
-          result: "forfeit",
-          data: "Player with uID " + user.uToken + " forfeited the match"
-        };
-        gameServer.sendMessageToMatch(matchId, "matchResults", results);
-        for (var player of players) {
-          gameServer.removePlayerFromActiveMatch(player.uToken, function() {
-            gameServer.removeCurrentMatchFromPlayer(
-              player.uToken,
-              false,
-              function() {
-                removeMatch(matchId);
-              }
-            );
-          });
-        }
       });
-    });
-  },
+    },
 
-  setChoice: function(message, ws) {
-    const token = message.userToken;
-    isValidUser(token).then(function(dbUser) {
-      if (!dbUser) {
-        return sendInvalidUser(ws);
-      }
-      if (!dbUser.currentMatch) {
-        return sendUserNotInMatch(ws);
-      }
-      var choice = message.message.choice;
-      if (!choice || !isValidChoice(choice)) {
-        return sendInvalidChoice(ws);
-      }
-      if (typeof choice == "number") {
-        choice = validChoices[choice - 1];
-      }
-
-      setUserChoice(dbUser.uToken, dbUser.currentMatch, choice).then(function(
-        match
-      ) {
-        var choices;
-        if ((choices = allChoicesMade(match))) {
-          results = calculateWinner(match.matchId, choices);
-          // TODO: Set Highscores and remove players from match
-          gameServer.sendMessageToMatch(match.matchId, "matchResults", results);
-
-          Promise.all([
-            isValidUser(results.player1.uToken),
-            isValidUser(results.player2.uToken)
-          ]).then(function(players) {
-            const player1 = players[0];
-            const player2 = players[1];
-
-            if (results.result == 1) {
-              console.log("player1Won");
-              increaseStreakForPlayer(player1);
-              resetStreakForPlayer(player2);
+    requestMatch: function(message, ws) {
+      const token = message.userToken;
+      isValidUser(token).then(function(user) {
+        if (!user) {
+          return sendInvalidUser(ws);
+        }
+        if (!user.currentMatch) {
+          getFirstEmptyMatch().then(function(match) {
+            if (match) {
+              console.log("Match Found");
+              placeUserInMatch(user, match).then(function(match) {
+                gameServer.sendUpdateToMatch(match.matchId);
+              });
+            } else {
+              match = createMatch(user);
+              gameServer.sendUpdateToMatch(match.matchId);
             }
-            if (results.result == 2) {
-              console.log("Player2Won");
-              increaseStreakForPlayer(player2);
-              resetStreakForPlayer(player1);
-            }
-            gameServer.removeCurrentMatchFromPlayer(
-              player1.uToken,
-              true,
-              function() {
-                if (player2) {
-                  gameServer.removeCurrentMatchFromPlayer(
-                    player2.uToken,
-                    true,
-                    function() {
-                      removeMatch(match.matchId);
-                    }
-                  );
-                } else {
-                  removeMatch(match.matchId);
-                }
-              }
-            );
-
-            return true;
           });
         } else {
-          console.log("Not Choices made");
-          gameServer.sendUpdateToMatch(match.matchId);
-          return true;
+          getMatch(user.currentMatch).then(function(match) {
+            if (match) {
+              placeUserInMatch(user, match).then(function(match) {
+                gameServer.sendUpdateToMatch(match.matchId);
+              });
+            } else {
+              match = createMatch(user);
+              gameServer.sendUpdateToMatch(match.matchId);
+            }
+          });
         }
+        return true;
       });
-    });
-  },
+    },
 
-  getHighscores: function(message, ws) {
+    forfeitMatch: function(message, ws) {
+      const token = message.userToken;
+      isValidUser(token).then(function(user) {
+        if (!user) {
+          return sendInvalidUser(ws);
+        }
+        if (!user.currentMatch) {
+          sendUserNotInMatch(ws);
+        }
+
+        const matchId = user.currentMatch;
+
+        gameServer.getPlayersInMatch(matchId, true, function(players) {
+          for (var player of players) {
+            if (user.uToken === player.uToken) {
+              resetStreakForPlayer(player);
+            } else {
+              increaseStreakForPlayer(player);
+            }
+          }
+          const results = {
+            result: "forfeit",
+            data: "Player with uID " + user.uToken + " forfeited the match"
+          };
+          gameServer.sendMessageToMatch(matchId, "matchResults", results);
+          for (var player of players) {
+            gameServer.removePlayerFromActiveMatch(player.uToken, function() {
+              gameServer.removeCurrentMatchFromPlayer(
+                player.uToken,
+                false,
+                function() {
+                  removeMatch(matchId);
+                }
+              );
+            });
+          }
+        });
+      });
+    },
+
+    setChoice: function(message, ws) {
+      const token = message.userToken;
+      isValidUser(token).then(function(dbUser) {
+        if (!dbUser) {
+          return sendInvalidUser(ws);
+        }
+        if (!dbUser.currentMatch) {
+          return sendUserNotInMatch(ws);
+        }
+        var choice = message.message.choice;
+        if (!choice || !isValidChoice(choice)) {
+          return sendInvalidChoice(ws);
+        }
+        if (typeof choice == "number") {
+          choice = validChoices[choice - 1];
+        }
+
+        setUserChoice(dbUser.uToken, dbUser.currentMatch, choice).then(function(
+          match
+        ) {
+          var choices;
+          if ((choices = allChoicesMade(match))) {
+            results = calculateWinner(match.matchId, choices);
+            // TODO: Set Highscores and remove players from match
+            gameServer.sendMessageToMatch(match.matchId, "matchResults", results);
+
+            Promise.all([
+              isValidUser(results.player1.uToken),
+              isValidUser(results.player2.uToken)
+            ]).then(function(players) {
+              const player1 = players[0];
+              const player2 = players[1];
+
+              if (results.result == 1) {
+                console.log("player1Won");
+                increaseStreakForPlayer(player1);
+                resetStreakForPlayer(player2);
+              }
+              if (results.result == 2) {
+                console.log("Player2Won");
+                increaseStreakForPlayer(player2);
+                resetStreakForPlayer(player1);
+              }
+              gameServer.removeCurrentMatchFromPlayer(
+                player1.uToken,
+                true,
+                function() {
+                  if (player2) {
+                    gameServer.removeCurrentMatchFromPlayer(
+                      player2.uToken,
+                      true,
+                      function() {
+                        removeMatch(match.matchId);
+                      }
+                    );
+                  } else {
+                    removeMatch(match.matchId);
+                  }
+                }
+              );
+
+              return true;
+            });
+          } else {
+            console.log("Not Choices made");
+            gameServer.sendUpdateToMatch(match.matchId);
+            return true;
+          }
+        });
+      });
+    },
+
+    getHighscores: function(message, ws) {
     const token = message.userToken;
     isValidUser(token).then(function(user) {
       if (!user) {
@@ -510,5 +514,6 @@ module.exports = {
         sendResponseToRequest(response, ws);
       });
     });
+    }
   }
 };

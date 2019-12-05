@@ -9,6 +9,7 @@ module.exports = class Database {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
+
     this.db;
   }
 
