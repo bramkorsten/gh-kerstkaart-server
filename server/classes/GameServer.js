@@ -11,7 +11,7 @@ module.exports = class GameServer {
     // Setup the local database connection and websocket server
     this.db = db;
     this.wss = new WebSocket.Server({ port: port });
-    this.functions = gameFunctions(db);
+    this.functions = gameFunctions(this, db);
 
     console.log("Websocket listening on port: " + port);
 
@@ -44,15 +44,15 @@ module.exports = class GameServer {
     });
   }
 
-  checkConnections() {
-    const interval = setInterval(function ping() {
+  checkConnections = () => {
+    const interval = setInterval(() => {
       for (var connection in connections) {
         if (connections[connection].isAlive === false) {
           console.log(
             "Client " + connection + " disconnected: No response on second ping"
           );
           // TODO: Remove Client from active games
-          gameServer.removePlayerFromActiveMatch(connection);
+          this.removePlayerFromActiveMatch(connection);
           connections[connection].terminate();
           delete connections[connection];
           return true;
@@ -64,12 +64,12 @@ module.exports = class GameServer {
     }, 10000);
   }
 
-  sendUpdateToMatch(matchId, match = false, sendChoices = false) {
-    this.getPlayersInMatch(matchId, false, function(players) {
-      const matchesCollection = db.collection("matches");
-      matchesCollection.findOne({ matchId: matchId }, function(err, match) {
+  sendUpdateToMatch = (matchId, match = false, sendChoices = false) => {
+    this.getPlayersInMatch(matchId, false, (players) => {
+      const matchesCollection = this.db.collection("matches");
+      matchesCollection.findOne({ matchId: matchId }, (err, match) => {
         if (!sendChoices) {
-          match.currentGame.players.forEach(function(player, i) {
+          match.currentGame.players.forEach((player, i) => {
             match.currentGame.players[i].choice = "Wouldn't you like to know";
           });
         }
@@ -89,8 +89,8 @@ module.exports = class GameServer {
     });
   }
 
-  sendMessageToMatch(matchId, messageType, message) {
-    this.getPlayersInMatch(matchId, false, function(players) {
+  sendMessageToMatch = (matchId, messageType, message) => {
+    this.getPlayersInMatch(matchId, false, (players) => {
       const response = {
         type: messageType,
         data: message
@@ -112,8 +112,8 @@ module.exports = class GameServer {
    * @param  {Boolean} returnObject Should the full played be returned?
    * @return {Array}          An array of user tokens
    */
-  getPlayersInMatch(matchId, returnObject = false, callback) {
-    db.collection("matches").findOne({ matchId: matchId }, function(err, r) {
+  getPlayersInMatch = (matchId, returnObject = false, callback) => {
+    this.db.collection("matches").findOne({ matchId: matchId }, (err, r) => {
       var players = [];
       if (returnObject) {
         for (var player of r.currentGame.players) {
@@ -139,8 +139,8 @@ module.exports = class GameServer {
     increaseGamesPlayed = false,
     callback = false
   ) {
-    const clientCollection = db.collection("clients");
-    clientCollection.findOne({ uToken: token }, function(err, user) {
+    const clientCollection = this.db.collection("clients");
+    clientCollection.findOne({ uToken: token }, (err, user) => {
       if (!user || !user.currentMatch) {
         return true;
       }
@@ -153,7 +153,7 @@ module.exports = class GameServer {
 
       clientCollection
         .updateOne({ uToken: token }, { $unset: { currentMatch: "" } })
-        .then(function() {
+        .then(() => {
           callback(true);
         });
       return true;
@@ -163,15 +163,15 @@ module.exports = class GameServer {
   removePlayerFromActiveMatch(token, callback = false) {
     // TODO: If player is in a current match, update the queue and let the opponent win!
 
-    const clientCollection = db.collection("clients");
-    clientCollection.findOne({ uToken: token }, function(err, user) {
+    const clientCollection = this.db.collection("clients");
+    clientCollection.findOne({ uToken: token }, (err, user) => {
       if (!user || !user.currentMatch) {
         return true;
       }
-      db.collection("matches").findOne({ matchId: user.currentMatch }, function(
+      this.db.collection("matches").findOne({ matchId: user.currentMatch }, (
         err,
         r
-      ) {
+      ) => {
         var currentGame = r.currentGame.players;
         var newGame = [];
         for (var player of currentGame) {
@@ -179,12 +179,12 @@ module.exports = class GameServer {
             newGame.push(player);
           }
         }
-        db.collection("matches")
+        this.db.collection("matches")
           .updateOne(
             { matchId: user.currentMatch },
             { $set: { "currentGame.players": newGame, matchFull: false } }
           )
-          .then(function() {
+          .then(() => {
             callback(true);
           });
       });

@@ -301,7 +301,7 @@ function sendResponseToRequest(message, ws) {
 
 // Sandboxed functions to keep users from running game logic directly
 
-module.exports = database => {
+module.exports = (gameServer, database) => {
   db = database;
 
   return {
