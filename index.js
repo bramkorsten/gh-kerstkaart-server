@@ -6,8 +6,9 @@
  * @Last modified time: 2019-12-05T10:54:36+01:00
  * @Copyright: Copyright 2019 - Bram Korsten
  */
-gameserver = null;
-db = null;
+let gameserver = null;
+let db = null;
+
 const config = require("./_config.json");
 const crypto = require("crypto");
 const key = crypto
@@ -15,6 +16,7 @@ const key = crypto
   .update(String(config.secret))
   .digest("hex")
   .slice(0, 16);
+
 const crypt_iv = Buffer.from([
   0xd8,
   0xb1,
@@ -38,8 +40,9 @@ connections = [];
 var port = process.env.PORT || 5000;
 
 const WebSocket = require("ws");
-const DB = require("./classes/database.js");
+const DB = require("./classes/database");
 const database = new DB();
+
 database.init().then(function(database) {
   db = database;
   gameServer = new GameServer();
@@ -54,7 +57,7 @@ class GameServer {
     console.log("Websocket listening on port: " + port);
 
     // database.setDefaults();
-    this.functions = require("./classes/functions.js");
+    this.functions = require("./classes/functions");
     this.setConnection();
     this.checkConnections();
   }
