@@ -37,7 +37,7 @@ const crypt_iv = Buffer.from([
 ]);
 
 connections = [];
-var port = process.env.PORT || 5000;
+var port = process.env.PORT || 3000;
 
 const WebSocket = require("ws");
 const DB = require("./classes/database");
