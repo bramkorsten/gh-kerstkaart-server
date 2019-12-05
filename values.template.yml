@@ -8,6 +8,5 @@ webReplicas: __REPLICAS__
 ingress:
   createIngress: true
   tls: true
-envSecretName: kerstkaart-server-secrets
 dbs:
   mongodb: true
