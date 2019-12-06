@@ -1,0 +1,12 @@
+domain: kerstkaart-server__STAGE__.meh.greenhousegroup.com
+email: meh@greenhousegroup.com
+version: __VERSION__
+projectName: kerstkaart-server
+dockerImage: registry.gitlab.com/greenhousegroup/creativedevelopment/kerstkaart-server:__VERSION__
+dockerPort: 3000
+webReplicas: __REPLICAS__
+ingress:
+  createIngress: true
+  tls: true
+dbs:
+  mongodb: true

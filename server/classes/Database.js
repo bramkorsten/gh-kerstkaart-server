@@ -1,36 +1,37 @@
+const MONGODB_URI = process.env.MONGODB_URI ? `${process.env.MONGODB_URI}&authSource=admin` : null;
+
 module.exports = class Database {
   constructor() {
     const MongoClient = require("mongodb").MongoClient;
-    this.url = "mongodb://localhost:27017";
     this.dbName = "kerstkaart2019";
+    this.url = process.env.MONGODB_URL || MONGODB_URI || `mongodb://localhost:27017/${this.dbName}`;
     this.client = new MongoClient(this.url, {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
+
     this.db;
   }
 
-  async init() {
-    var context = this;
-    return new Promise(function(resolve, reject) {
-      context.client.connect(function(err) {
+  init = async () => {
+    return new Promise((resolve, reject) => {
+      this.client.connect((err) => {
         console.log("Connected successfully to server");
-
-        context.db = context.client.db(context.dbName);
-        resolve(context.db);
+        this.db = this.client.db(this.dbName);
+        resolve(this.db);
       });
     });
   }
 
-  getDatabase() {
+  getDatabase = () => {
     return this.db;
   }
 
-  createNewDatabase() {
+  createNewDatabase = () => {
     console.log("Function was never implemented :)");
   }
 
-  closeConnection() {
+  closeConnection = () => {
     this.client.close();
   }
 };
