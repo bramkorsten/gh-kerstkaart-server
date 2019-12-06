@@ -135,9 +135,17 @@ function getUserMatch(user) {
 }
 
 function setUserMatch(user, matchId) {
-  return db
-    .collection("clients")
-    .updateOne({ uToken: user.uToken }, { $set: { currentMatch: matchId } });
+  return new Promise((resolve, reject) => {
+    try {
+      db
+        .collection("clients")
+        .updateOne({ uToken: user.uToken }, { $set: { currentMatch: matchId } });
+
+      return resolve(true);
+    } catch (e) {
+      return reject(e);
+    }
+  });
 }
 
 function setUserChoice(token, matchId, choice) {
@@ -251,8 +259,8 @@ function calculateWinner(matchId, choices) {
   return choices;
 }
 
-function placeUserInMatch(user, match) {
-  setUserMatch(user, match.matchId);
+async function placeUserInMatch(user, match) {
+  await setUserMatch(user, match.matchId);
   return new Promise(function(resolve, reject) {
     getMatch(match.matchId).then(function(match) {
       for (var player of match.currentGame.players) {
@@ -362,9 +370,10 @@ module.exports = (gameServer, database) => {
           getFirstEmptyMatch().then(function(match) {
             if (match) {
               console.log("Match Found");
-              placeUserInMatch(user, match).then(function(match) {
-                gameServer.sendUpdateToMatch(match.matchId);
-              });
+              placeUserInMatch(user, match)
+                .then(function(match) {
+                  gameServer.sendUpdateToMatch(match.matchId);
+                });
             } else {
               match = createMatch(user);
               gameServer.sendUpdateToMatch(match.matchId);
@@ -388,12 +397,13 @@ module.exports = (gameServer, database) => {
 
     forfeitMatch: function(message, ws) {
       const token = message.userToken;
+
       isValidUser(token).then(function(user) {
         if (!user) {
           return sendInvalidUser(ws);
         }
         if (!user.currentMatch) {
-          sendUserNotInMatch(ws);
+          return sendUserNotInMatch(ws);
         }
 
         const matchId = user.currentMatch;
@@ -410,18 +420,20 @@ module.exports = (gameServer, database) => {
             result: "forfeit",
             data: "Player with uID " + user.uToken + " forfeited the match"
           };
-          gameServer.sendMessageToMatch(matchId, "matchResults", results);
-          for (var player of players) {
-            gameServer.removePlayerFromActiveMatch(player.uToken, function() {
-              gameServer.removeCurrentMatchFromPlayer(
-                player.uToken,
-                false,
-                function() {
-                  removeMatch(matchId);
-                }
-              );
-            });
-          }
+
+          gameServer.sendMessageToMatch(matchId, "matchResults", results, () => {
+            for (var player of players) {
+              gameServer.removePlayerFromActiveMatch(player.uToken, function() {
+                gameServer.removeCurrentMatchFromPlayer(
+                  player.uToken,
+                  false,
+                  function() {
+                    removeMatch(matchId);
+                  }
+                );
+              });
+            }
+          });
         });
       });
     },
@@ -490,7 +502,7 @@ module.exports = (gameServer, database) => {
               return true;
             });
           } else {
-            console.log("Not Choices made");
+            console.log("Not all choices made");
             gameServer.sendUpdateToMatch(match.matchId);
             return true;
           }

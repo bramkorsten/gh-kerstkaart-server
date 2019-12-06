@@ -13,7 +13,7 @@ module.exports = class Database {
     this.db;
   }
 
-  async init() {
+  init = async () => {
     return new Promise((resolve, reject) => {
       this.client.connect((err) => {
         console.log("Connected successfully to server");
@@ -23,15 +23,15 @@ module.exports = class Database {
     });
   }
 
-  getDatabase() {
+  getDatabase = () => {
     return this.db;
   }
 
-  createNewDatabase() {
+  createNewDatabase = () => {
     console.log("Function was never implemented :)");
   }
 
-  closeConnection() {
+  closeConnection = () => {
     this.client.close();
   }
 };
