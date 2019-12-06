@@ -4,7 +4,7 @@ module.exports = class Database {
   constructor() {
     const MongoClient = require("mongodb").MongoClient;
     this.dbName = "kerstkaart2019";
-    this.url = MONGODB_URI || `mongodb://localhost:27017/${this.dbName}`;
+    this.url = process.env.MONGODB_URL || MONGODB_URI || `mongodb://localhost:27017/${this.dbName}`;
     this.client = new MongoClient(this.url, {
       useNewUrlParser: true,
       useUnifiedTopology: true
