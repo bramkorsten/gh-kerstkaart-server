@@ -1,10 +1,14 @@
 const WebSocket = require("ws");
 
+const Client = require('../data/models/Client');
+const Match = require('../data/models/Match');
+
 const { encrypt, noop } = require('../helpers/cryptors');
 
 const gameFunctions = require("../helpers/gameFunctions");
 
 const port = process.env.PORT || 3000;
+
 
 module.exports = class GameServer {
   constructor(db) {
@@ -115,7 +119,7 @@ module.exports = class GameServer {
    * @return {Array}          An array of user tokens
    */
   getPlayersInMatch = (matchId, returnObject = false, callback) => {
-    this.db.findOne({ matchId: matchId }, (err, r) => {
+    Match.findOne({ matchId: matchId }, (err, r) => {
       var players = [];
 
       if (returnObject) {
@@ -137,62 +141,74 @@ module.exports = class GameServer {
    * @param  {Boolean} increaseGamesPlayed         Whether to increase the number of games played
    * @return {Boolean}
    */
-  removeCurrentMatchFromPlayer(
+  removeCurrentMatchFromPlayer = async (
     token,
     increaseGamesPlayed = false,
     callback = false
-  ) {
-    const clientCollection = this.db.collection("clients");
-    clientCollection.findOne({ uToken: token }, (err, user) => {
-      if (!user || !user.currentMatch) {
-        return true;
-      }
-      if (increaseGamesPlayed) {
-        clientCollection.updateOne(
-          { uToken: token },
-          { $inc: { gamesPlayed: 1 } }
-        );
-      }
+  ) => {
+    await new Promise((resolve, reject) => Client.findOne({ uToken: token },
+      (err, user) => {
+        if (err) return reject(err);
+        if (!user || !user.currentMatch) return resolve();
+        return reject();
+      })
+    );
 
-      clientCollection
-        .updateOne({ uToken: token }, { $unset: { currentMatch: "" } })
-        .then(() => {
-          if (typeof callback === 'function') callback(true);
-        });
-      return true;
-    });
+    if (increaseGamesPlayed) {
+      await new Promise((resolve, reject) => Client.updateOne(
+        { uToken: token },
+        { $inc: { gamesPlayed: 1 } }, (err) => {
+        if (err) return reject(err);
+        return resolve();
+      }));
+    }
+
+    await new Proise((resolve, reject) => Client
+      .updateOne({ uToken: token }, { $unset: { currentMatch: "" } }, (err) => {
+        if (err) return reject(err);
+        if (typeof callback === 'function') callback(true);
+        return resolve(true);
+      }));
   }
 
   removePlayerFromActiveMatch = (token, callback = false) => {
     // TODO: If player is in a current match, update the queue and let the opponent win!
-
-    const clientCollection = this.db.collection("clients");
-    clientCollection.findOne({ uToken: token }, (err, user) => {
-
-      if (!user || !user.currentMatch) {
-        return true;
-      }
-
-      this.db.collection("matches").findOne({ matchId: user.currentMatch }, (
-        err,
-        r
-      ) => {
-        var currentGame = r.currentGame.players;
-        var newGame = [];
-        for (var player of currentGame) {
-          if (player.uToken != token) {
-            newGame.push(player);
-          }
+    await new Promise((resolve, reject) => Client.findOne(
+      { uToken: token },
+      (err, user) => {
+        if (err) return reject(err);
+        if (!user || !user.currentMatch) {
+          return resolve(true);
         }
-        this.db.collection("matches")
-          .updateOne(
-            { matchId: user.currentMatch },
-            { $set: { "currentGame.players": newGame, matchFull: false } }
-          )
-          .then(() => {
-            if (typeof callback === 'function') callback(true);
-          });
-      });
-    });
+        return reject(err);
+      }));
+
+    const result = await new Promise((resolve, reject) => Match.findOne(
+      { matchId: user.currentMatch },
+      (err, r) => {
+        if (err) return reject(err);
+        return resolve(r);
+      }));
+
+    var currentGame = result.currentGame.players;
+    var newGame = [];
+
+    for (var player of currentGame) {
+      if (player.uToken != token) {
+        newGame.push(player);
+      }
+    }
+
+    await new Promise((resolve, reject) => Match
+      .updateOne(
+        { matchId: user.currentMatch },
+        { $set: { "currentGame.players": newGame, matchFull: false } },
+        (err) => {
+          if (err) return reject(err);
+          if (typeof callback === 'function') callback(true);
+          return resolve(true)
+        }
+      )
+    )
   }
 }

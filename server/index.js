@@ -10,21 +10,10 @@
 const Database = require("./classes/Database");
 const GameServer = require('./classes/GameServer');
 
-const Test = require('./data/models/Test');
-
 connections = [];
 
 (async() => {
     const database = await Database('kerstkaart2019');
-
-    const testje = new Test({title: 'A'})
-    await testje.save((err, instance) => {
-        if (err) console.log(err);
-    })
-
-    const results = await Test.find();
-    console.log(results)
-
-    // new GameServer(database);
+    new GameServer(database);
 })();
 

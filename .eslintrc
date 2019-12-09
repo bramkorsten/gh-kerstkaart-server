@@ -1,0 +1,14 @@
+{
+  "parser": "babel-eslint",
+  "extends": "airbnb-base",
+  "rules": {
+    "func-names": 0,
+    "no-underscore-dangle": 0,
+    "consistent-return": "warn",
+    "import/prefer-default-export": 0
+  },
+  "env": {
+    "browser": false,
+    "node": true
+  }
+}
