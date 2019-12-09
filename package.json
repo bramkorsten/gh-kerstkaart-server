@@ -19,6 +19,7 @@
   "homepage": "https://github.com/bramkorsten/gh-poc2-kerstkaart#readme",
   "dependencies": {
     "mongodb": "^3.3.5",
+    "mongoose": "^5.7.14",
     "simple-encryptor": "^3.0.0",
     "ws": "^7.2.0"
   },
