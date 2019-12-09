@@ -105,29 +105,36 @@ function generateMatchId() {
 }
 
 function createMatch(user) {
-  const newMatchId = generateMatchId();
-  console.log("Creating match with id: " + newMatchId);
-  const match = {
-    matchId: newMatchId,
-    matchFull: false,
-    matchWonBy: undefined,
-    matchStartTime: undefined,
-    matchEndTime: undefined,
-    initializer: user,
-    currentGame: {
-      players: [
-        {
-          uToken: user.uToken,
-          player: user,
-          choice: undefined,
-          streak: 0
-        }
-      ]
-    }
-  };
-  db.collection("matches").insertOne(match);
-  setUserMatch(user, match.matchId);
-  return match;
+  return new Promise((resolve, reject) => {
+    const newMatchId = generateMatchId();
+    console.log("Creating match with id: " + newMatchId);
+    const match = {
+      matchId: newMatchId,
+      matchFull: false,
+      matchWonBy: undefined,
+      matchStartTime: undefined,
+      matchEndTime: undefined,
+      initializer: user,
+      currentGame: {
+        players: [
+          {
+            uToken: user.uToken,
+            player: user,
+            choice: undefined,
+            streak: 0
+          }
+        ]
+      }
+    };
+    // db.collection("matches").insertOne(match);
+    // setUserMatch(user, match.matchId);
+    Promise.all([db.collection("matches").insertOne(match), setUserMatch(user, match.matchId)]).then((results) => {
+      resolve(match);
+    }).catch((error) => {
+      reject(error);
+    });
+  });
+  
 }
 
 function getUserMatch(user) {
@@ -375,8 +382,10 @@ module.exports = (gameServer, database) => {
                   gameServer.sendUpdateToMatch(match.matchId);
                 });
             } else {
-              match = createMatch(user);
-              gameServer.sendUpdateToMatch(match.matchId);
+              createMatch(user).then((match) => {
+                gameServer.sendUpdateToMatch(match.matchId);
+              });
+              
             }
           });
         } else {
@@ -386,8 +395,9 @@ module.exports = (gameServer, database) => {
                 gameServer.sendUpdateToMatch(match.matchId);
               });
             } else {
-              match = createMatch(user);
-              gameServer.sendUpdateToMatch(match.matchId);
+              createMatch(user).then((match) => {
+                gameServer.sendUpdateToMatch(match.matchId);
+              });
             }
           });
         }
