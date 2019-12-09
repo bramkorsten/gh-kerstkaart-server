@@ -7,13 +7,24 @@
  * @Copyright: Copyright 2019 - Bram Korsten
  */
 
-const DB = require("./classes/Database");
+const Database = require("./classes/Database");
 const GameServer = require('./classes/GameServer');
+
+const Test = require('./data/models/Test');
 
 connections = [];
 
-const database = new DB();
+(async() => {
+    const database = await Database('kerstkaart2019');
 
-database.init().then((database) => {
-  new GameServer(database);
-});
+    const testje = new Test({title: 'A'})
+    await testje.save((err, instance) => {
+        if (err) console.log(err);
+    })
+
+    const results = await Test.find();
+    console.log(results)
+
+    // new GameServer(database);
+})();
+

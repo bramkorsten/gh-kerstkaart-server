@@ -66,8 +66,7 @@ module.exports = class GameServer {
 
   sendUpdateToMatch = (matchId, match = false, sendChoices = false) => {
     this.getPlayersInMatch(matchId, false, (players) => {
-      const matchesCollection = this.db.collection("matches");
-      matchesCollection.findOne({ matchId: matchId }, (err, match) => {
+      this.db.findOne({ matchId: matchId }, (err, match) => {
         if (!sendChoices) {
           match.currentGame.players.forEach((player, i) => {
             match.currentGame.players[i].choice = "Wouldn't you like to know";
@@ -116,7 +115,7 @@ module.exports = class GameServer {
    * @return {Array}          An array of user tokens
    */
   getPlayersInMatch = (matchId, returnObject = false, callback) => {
-    this.db.collection("matches").findOne({ matchId: matchId }, (err, r) => {
+    this.db.findOne({ matchId: matchId }, (err, r) => {
       var players = [];
 
       if (returnObject) {
