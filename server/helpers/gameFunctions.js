@@ -1,15 +1,18 @@
+const Client = require('../data/models/Client');
+const Match = require('../data/models/Match');
+
 // TODO: Optimize database writes by only calling write() once
 let db;
 
 const validChoices = ["rock", "paper", "scissors", 1, 2, 3];
 
 function isValidUser(token) {
-  return db.collection("clients").findOne({ uToken: token });
+  return Client.findOne({ uToken: token });
 }
 
 function createNewUser(user, token) {
   console.log("Creating new user: " + user.name);
-  const newUser = {
+  const client = new Client({
     uToken: token,
     name: user.name,
     gamesPlayed: 0,
@@ -17,8 +20,9 @@ function createNewUser(user, token) {
       currentStreak: 0,
       bestStreak: 0
     }
-  };
-  return db.collection("clients").insertOne(newUser);
+  })
+
+  return client.save();
 }
 
 function isValidChoice(choice) {
@@ -53,15 +57,15 @@ function sendInvalidChoice(ws) {
 }
 
 function getMatch(matchId) {
-  return db.collection("matches").findOne({ matchId: matchId });
+  return Match.findOne({ matchId: matchId });
 }
 
 function removeMatch(matchId) {
-  db.collection("matches").deleteOne({ matchId: matchId });
+  Match.deleteOne({ matchId: matchId });
 }
 
 function setMatchWon(matchId, winner) {
-  db.collection("matches").updateOne(
+  Match.updateOne(
     { matchId: matchId },
     { $set: { matchWonBy: winner } }
   );
@@ -70,7 +74,7 @@ function setMatchWon(matchId, winner) {
 function increaseStreakForPlayer(user) {
   const newScore = user.highscore.currentStreak + 1;
   if (user.highscore.bestStreak == user.highscore.currentStreak) {
-    db.collection("clients").updateOne(
+    Client.updateOne(
       { uToken: user.uToken },
       {
         $set: {
@@ -80,7 +84,7 @@ function increaseStreakForPlayer(user) {
       }
     );
   } else {
-    db.collection("clients").updateOne(
+    Client.updateOne(
       { uToken: user.uToken },
       { $set: { "highscore.currentStreak": newScore } }
     );
@@ -88,14 +92,14 @@ function increaseStreakForPlayer(user) {
 }
 
 function resetStreakForPlayer(user) {
-  db.collection("clients").updateOne(
+  Client.updateOne(
     { uToken: user.uToken },
     { $set: { "highscore.currentStreak": 0 } }
   );
 }
 
 function getFirstEmptyMatch() {
-  return db.collection("matches").findOne({ matchFull: false });
+  return Match.findOne({ matchFull: false });
 }
 
 function generateMatchId() {
@@ -108,7 +112,8 @@ function createMatch(user) {
   return new Promise((resolve, reject) => {
     const newMatchId = generateMatchId();
     console.log("Creating match with id: " + newMatchId);
-    const match = {
+
+    const match = new Match({
       matchId: newMatchId,
       matchFull: false,
       matchWonBy: undefined,
@@ -125,20 +130,21 @@ function createMatch(user) {
           }
         ]
       }
-    };
-    // db.collection("matches").insertOne(match);
+    });
+
+    // Match.save(match);
     // setUserMatch(user, match.matchId);
-    Promise.all([db.collection("matches").insertOne(match), setUserMatch(user, match.matchId)]).then((results) => {
+    Promise.all([match.save(), setUserMatch(user, match.matchId)]).then((results) => {
       resolve(match);
     }).catch((error) => {
       reject(error);
     });
   });
-  
+
 }
 
 function getUserMatch(user) {
-  return db.collection("clients").findOne({ uToken: user.uToken });
+  return Client.findOne({ uToken: user.uToken });
 }
 
 function setUserMatch(user, matchId) {
@@ -157,7 +163,7 @@ function setUserMatch(user, matchId) {
 
 function setUserChoice(token, matchId, choice) {
   return new Promise(function(resolve, reject) {
-    const matchCollection = db.collection("matches");
+    const matchCollection = Match;
     matchCollection.findOne({ matchId: matchId }, function(err, match) {
       if (err) {
         reject(err);
@@ -285,7 +291,7 @@ async function placeUserInMatch(user, match) {
         };
         match.currentGame.players.push(player);
         match.matchFull = true;
-        db.collection("matches").replaceOne(
+        Match.replaceOne(
           { matchId: match.matchId },
           match,
           function(err, r) {
@@ -385,7 +391,7 @@ module.exports = (gameServer, database) => {
               createMatch(user).then((match) => {
                 gameServer.sendUpdateToMatch(match.matchId);
               });
-              
+
             }
           });
         } else {

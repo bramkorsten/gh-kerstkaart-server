@@ -171,14 +171,14 @@ module.exports = class GameServer {
       }));
   }
 
-  removePlayerFromActiveMatch = (token, callback = false) => {
+  removePlayerFromActiveMatch = async (token, callback = false) => {
     // TODO: If player is in a current match, update the queue and let the opponent win!
-    await new Promise((resolve, reject) => Client.findOne(
+    const user = await new Promise((resolve, reject) => Client.findOne(
       { uToken: token },
       (err, user) => {
         if (err) return reject(err);
         if (!user || !user.currentMatch) {
-          return resolve(true);
+          return resolve(user);
         }
         return reject(err);
       }));
