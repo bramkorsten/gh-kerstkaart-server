@@ -6,6 +6,7 @@ const clientSchema = new Schema({
   name: String,
   gamesPlayed: Number,
   currentMatch: String,
+  isAdmin: Boolean,
   highscore: {
     currentStreak: Number,
     bestStreak: Number,

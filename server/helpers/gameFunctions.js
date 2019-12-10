@@ -20,6 +20,7 @@ const createNewUser = (user, token) => {
     name: user.name,
     gamesPlayed: 0,
     currentMatch: '',
+    isAdmin: false,
     highscore: {
       currentStreak: 0,
       bestStreak: 0
@@ -312,6 +313,28 @@ module.exports = (gameServer, database) => {
       ws.send(JSON.stringify(response));
     },
 
+    requestAdmin: async function(message, ws) {
+      const token = message.userToken;
+      const user = await isValidUser(token).catch((error) => {return sendInvalidUser(ws);});
+      if (!user) {
+        return sendInvalidUser(ws);
+      }
+      if (message.message.adminPassword !== "K3rstK44rtBr4m4l3x") {
+        const response = {
+          type: "error",
+          data: "requestAdmin is not a valid function"
+        };
+        return sendResponseToRequest(response, ws);
+      }
+      user.isAdmin = true;
+      await user.save();
+      const response = {
+        type: "message",
+        data: "You're now an admin"
+      };
+      return sendResponseToRequest(response, ws);
+    },
+
     setUserInformation: function(message, ws) {
       const token = message.userToken;
       const user = message.message;
@@ -346,6 +369,41 @@ module.exports = (gameServer, database) => {
         };
         sendResponseToRequest(response, ws);
       });
+    },
+
+    deleteUser: async function(message, ws) {
+      const token = message.userToken;
+      const user = await isValidUser(token).catch((error) => {return sendInvalidUser(ws);});
+      if (!user) {
+        return sendInvalidUser(ws);
+      }
+      if (!user.isAdmin) {
+        const response = {
+          type: "error",
+          data: "deleteUserInformation is not a valid function"
+        };
+        return sendResponseToRequest(response, ws);
+      }
+      if (!message.message.userToDelete) {
+        const response = {
+          type: "error",
+          data: "Provide a user to delete..."
+        };
+        return sendResponseToRequest(response, ws);
+      }
+      if (message.message.userToDelete === token) {
+        const response = {
+          type: "error",
+          data: "Cannot delete yourself"
+        };
+        return sendResponseToRequest(response, ws);
+      }
+      await Client.deleteOne({uToken: message.message.userToDelete});
+      const response = {
+        type: "message",
+        data: "Client with token '" + message.message.userToDelete + "' has been deleted",
+      };
+      return sendResponseToRequest(response, ws);
     },
 
     requestMatch: function(message, ws) {
