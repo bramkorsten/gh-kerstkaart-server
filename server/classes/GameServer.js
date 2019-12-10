@@ -12,7 +12,7 @@ const port = process.env.PORT || 3000;
 
 module.exports = class GameServer {
   constructor(db) {
-    this.version = "1.2.0";
+    this.version = "1.2.1";
     // Setup the local database connection and websocket server
     this.db = db;
     this.wss = new WebSocket.Server({ port: port });
