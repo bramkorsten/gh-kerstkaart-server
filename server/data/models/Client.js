@@ -5,6 +5,7 @@ const clientSchema = new Schema({
   uToken:  String,
   name: String,
   gamesPlayed: Number,
+  currentMatch: String,
   highscore: {
     currentStreak: Number,
     bestStreak: Number,

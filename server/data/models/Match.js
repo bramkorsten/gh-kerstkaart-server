@@ -7,6 +7,10 @@ const matchSchema = new Schema({
   matchWonBy: String,
   matchStartTime: Date,
   matchEndTime: Date,
+  initializer: {},
+  currentGame: {
+    players: []
+  }
 });
 
 module.exports = mongoose.model('Match', matchSchema)

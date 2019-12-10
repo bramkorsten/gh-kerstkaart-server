@@ -19,6 +19,7 @@ const createNewUser = (user, token) => {
     uToken: token,
     name: user.name,
     gamesPlayed: 0,
+    currentMatch: '',
     highscore: {
       currentStreak: 0,
       bestStreak: 0
@@ -56,40 +57,31 @@ const sendInvalidChoice = (ws) => {
   return false;
 }
 
-const getMatch = (matchId) => Match.findOne({ matchId: matchId });
+const getMatch = async (matchId) => await Match.findOne({ matchId: matchId });
 
-const removeMatch = (matchId) => Match.deleteOne({ matchId: matchId });
+const removeMatch = async (matchId) => await Match.deleteOne({ matchId: matchId });
 
-const setMatchWon = (matchId, winner) => Match.updateOne({ matchId: matchId },
-  { $set: { matchWonBy: winner } }
-);
+const setMatchWon = async (matchId, winner) => await Match.updateOne({ matchId: matchId },{ matchWonBy: winner });
 
-const increaseStreakForPlayer = (user) => {
+const increaseStreakForPlayer = async (user) => {
   const newScore = user.highscore.currentStreak + 1;
 
+  var dbUser = await Client.findOne({uToken: user.uToken}).catch((error) => {console.log("Something went wrong finding a player", error)});
+  
+  dbUser.highscore.currentStreak = newScore;
   if (user.highscore.bestStreak === user.highscore.currentStreak) {
-    return Client.updateOne(
-      { uToken: user.uToken },
-      {
-        $set: {
-          "highscore.currentStreak": newScore,
-          "highscore.bestStreak": newScore
-        }
-      }
-    );
+    dbUser.highscore.bestStreak = newScore;
   }
-
-  return Client.updateOne(
-    { uToken: user.uToken },
-    { $set: { "highscore.currentStreak": newScore } }
-  );
+  await dbUser.save();
+  return true;
 }
 
-const resetStreakForPlayer = (user) =>
-  Client.updateOne(
+const resetStreakForPlayer = async (user) => {
+  await Client.updateOne(
     { uToken: user.uToken },
-    { $set: { "highscore.currentStreak": 0 } }
+    { "highscore.currentStreak" : 0  }
   );
+}
 
 const getFirstEmptyMatch = () => Match.findOne({ matchFull: false });
 
@@ -130,9 +122,9 @@ function getUserMatch(user) {
 }
 
 function setUserMatch(user, matchId) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
-      Client.updateOne({ uToken: user.uToken }, { $set: { currentMatch: matchId } });
+      await Client.updateOne({ uToken: user.uToken }, {currentMatch: matchId });
       return resolve(true);
     } catch (e) {
       return reject(e);
@@ -295,7 +287,7 @@ async function placeUserInMatch(user, match) {
 }
 
 function getHighscoresFromDatabase() {
-  return Client.find().toArray();
+  return Client.find();
 }
 
 function sendResponseToRequest(message, ws) {
@@ -313,7 +305,8 @@ module.exports = (gameServer, database) => {
       const response = {
         type: "handshake",
         data: {
-          userToken: message.userToken
+          userToken: message.userToken,
+          serverVersion: gameServer.version
         }
       };
       ws.send(JSON.stringify(response));
@@ -420,7 +413,7 @@ module.exports = (gameServer, database) => {
                 gameServer.removeCurrentMatchFromPlayer(
                   player.uToken,
                   false,
-                  function() {
+                  function() {                    
                     removeMatch(matchId);
                   }
                 );
