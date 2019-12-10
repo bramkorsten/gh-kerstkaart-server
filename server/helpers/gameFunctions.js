@@ -12,6 +12,7 @@ function isValidUser(token) {
 
 function createNewUser(user, token) {
   console.log("Creating new user: " + user.name);
+
   const client = new Client({
     uToken: token,
     name: user.name,
@@ -150,10 +151,7 @@ function getUserMatch(user) {
 function setUserMatch(user, matchId) {
   return new Promise((resolve, reject) => {
     try {
-      db
-        .collection("clients")
-        .updateOne({ uToken: user.uToken }, { $set: { currentMatch: matchId } });
-
+      Client.updateOne({ uToken: user.uToken }, { $set: { currentMatch: matchId } });
       return resolve(true);
     } catch (e) {
       return reject(e);
@@ -273,47 +271,50 @@ function calculateWinner(matchId, choices) {
 }
 
 async function placeUserInMatch(user, match) {
+
   await setUserMatch(user, match.matchId);
+
   return new Promise(function(resolve, reject) {
-    getMatch(match.matchId).then(function(match) {
-      for (var player of match.currentGame.players) {
-        if (player.uToken == user.uToken) {
-          console.log("Player already in match");
-          resolve(match);
-        }
-      }
-      if (match.currentGame.players.length != 2) {
-        const player = {
-          uToken: user.uToken,
-          player: user,
-          choice: undefined,
-          streak: 0
-        };
-        match.currentGame.players.push(player);
-        match.matchFull = true;
-        Match.replaceOne(
-          { matchId: match.matchId },
-          match,
-          function(err, r) {
-            if (err) {
-              reject(err);
-            }
+    getMatch(match.matchId)
+      .then(function(match) {
+        for (var player of match.currentGame.players) {
+          if (player.uToken == user.uToken) {
+            console.log("Player already in match");
             resolve(match);
           }
-        );
-      } else {
-        console.log("Game is full");
-        resolve(false);
+        }
+        if (match.currentGame.players.length != 2) {
+          const player = {
+            uToken: user.uToken,
+            player: user,
+            choice: undefined,
+            streak: 0
+          };
+
+          match.currentGame.players.push(player);
+          match.matchFull = true;
+
+          Match.replaceOne(
+            { matchId: match.matchId },
+            match,
+            function(err, r) {
+              if (err) {
+                reject(err);
+              }
+              resolve(match);
+            }
+          );
+        } else {
+          console.log("Game is full");
+          resolve(false);
+        }
       }
-    });
+    );
   });
 }
 
 function getHighscoresFromDatabase() {
-  return db
-    .collection("clients")
-    .find({})
-    .toArray();
+  return Client.find().toArray();
 }
 
 function sendResponseToRequest(message, ws) {
@@ -391,7 +392,6 @@ module.exports = (gameServer, database) => {
               createMatch(user).then((match) => {
                 gameServer.sendUpdateToMatch(match.matchId);
               });
-
             }
           });
         } else {
@@ -415,12 +415,8 @@ module.exports = (gameServer, database) => {
       const token = message.userToken;
 
       isValidUser(token).then(function(user) {
-        if (!user) {
-          return sendInvalidUser(ws);
-        }
-        if (!user.currentMatch) {
-          return sendUserNotInMatch(ws);
-        }
+        if (!user) return sendInvalidUser(ws);
+        if (!user.currentMatch) return sendUserNotInMatch(ws);
 
         const matchId = user.currentMatch;
 
