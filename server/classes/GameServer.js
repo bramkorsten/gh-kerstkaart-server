@@ -57,7 +57,6 @@ module.exports = class GameServer {
             "Client " + connection + " disconnected: No response on second ping"
           );
           // TODO: Remove Client from active games
-          this.removePlayerFromActiveMatch(connection);
           connections[connection].terminate();
           delete connections[connection];
           return true;
