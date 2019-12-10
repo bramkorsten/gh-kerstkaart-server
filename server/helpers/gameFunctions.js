@@ -6,11 +6,13 @@ let db;
 
 const validChoices = ["rock", "paper", "scissors", 1, 2, 3];
 
-function isValidUser(token) {
-  return Client.findOne({ uToken: token });
-}
+const isValidUser = (token) => Client.findOne({ uToken: token });
 
-function createNewUser(user, token) {
+const isValidChoice = (choice) => validChoices.includes(choice);
+
+const generateMatchId = () => Math.random().toString(36).substr(2, 9);
+
+const createNewUser = (user, token) => {
   console.log("Creating new user: " + user.name);
 
   const client = new Client({
@@ -26,20 +28,17 @@ function createNewUser(user, token) {
   return client.save();
 }
 
-function isValidChoice(choice) {
-  return validChoices.includes(choice);
-}
-
-function sendInvalidUser(ws) {
+const sendInvalidUser = (ws) => {
   const response = {
     type: "error",
     data: "uID is invalid"
   };
+
   ws.send(JSON.stringify(response));
   return false;
 }
 
-function sendUserNotInMatch(ws) {
+const sendUserNotInMatch = (ws) => {
   const response = {
     type: "error",
     data: "User is not in a match"
@@ -48,7 +47,7 @@ function sendUserNotInMatch(ws) {
   return false;
 }
 
-function sendInvalidChoice(ws) {
+const sendInvalidChoice = (ws) => {
   const response = {
     type: "error",
     data: "Invalid Choice"
@@ -57,25 +56,19 @@ function sendInvalidChoice(ws) {
   return false;
 }
 
-function getMatch(matchId) {
-  return Match.findOne({ matchId: matchId });
-}
+const getMatch = (matchId) => Match.findOne({ matchId: matchId });
 
-function removeMatch(matchId) {
-  Match.deleteOne({ matchId: matchId });
-}
+const removeMatch = (matchId) => Match.deleteOne({ matchId: matchId });
 
-function setMatchWon(matchId, winner) {
-  Match.updateOne(
-    { matchId: matchId },
-    { $set: { matchWonBy: winner } }
-  );
-}
+const setMatchWon = (matchId, winner) => Match.updateOne({ matchId: matchId },
+  { $set: { matchWonBy: winner } }
+);
 
-function increaseStreakForPlayer(user) {
+const increaseStreakForPlayer = (user) => {
   const newScore = user.highscore.currentStreak + 1;
-  if (user.highscore.bestStreak == user.highscore.currentStreak) {
-    Client.updateOne(
+
+  if (user.highscore.bestStreak === user.highscore.currentStreak) {
+    return Client.updateOne(
       { uToken: user.uToken },
       {
         $set: {
@@ -84,33 +77,23 @@ function increaseStreakForPlayer(user) {
         }
       }
     );
-  } else {
-    Client.updateOne(
-      { uToken: user.uToken },
-      { $set: { "highscore.currentStreak": newScore } }
-    );
   }
+
+  return Client.updateOne(
+    { uToken: user.uToken },
+    { $set: { "highscore.currentStreak": newScore } }
+  );
 }
 
-function resetStreakForPlayer(user) {
+const resetStreakForPlayer = (user) =>
   Client.updateOne(
     { uToken: user.uToken },
     { $set: { "highscore.currentStreak": 0 } }
   );
-}
 
-function getFirstEmptyMatch() {
-  return Match.findOne({ matchFull: false });
-}
+const getFirstEmptyMatch = () => Match.findOne({ matchFull: false });
 
-function generateMatchId() {
-  return Math.random()
-    .toString(36)
-    .substr(2, 9);
-}
-
-function createMatch(user) {
-  return new Promise((resolve, reject) => {
+const createMatch = (user) => new Promise((resolve, reject) => {
     const newMatchId = generateMatchId();
     console.log("Creating match with id: " + newMatchId);
 
@@ -133,16 +116,14 @@ function createMatch(user) {
       }
     });
 
-    // Match.save(match);
-    // setUserMatch(user, match.matchId);
-    Promise.all([match.save(), setUserMatch(user, match.matchId)]).then((results) => {
-      resolve(match);
-    }).catch((error) => {
-      reject(error);
-    });
-  });
-
-}
+    Promise.all([match.save(), setUserMatch(user, match.matchId)])
+      .then((results) => {
+        resolve(match);
+      }).catch((error) => {
+        reject(error);
+      });
+    }
+  );
 
 function getUserMatch(user) {
   return Client.findOne({ uToken: user.uToken });
